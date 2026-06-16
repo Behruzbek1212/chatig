@@ -4,11 +4,17 @@ use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\LeadController;
+use App\Http\Controllers\Api\V1\MiniApp\CatalogController;
+use App\Http\Controllers\Api\V1\MiniApp\OrderController as MiniAppOrderController;
+use App\Http\Controllers\Api\V1\MiniApp\StoreController as MiniAppStoreController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProductImageController;
 use App\Http\Controllers\Api\V1\Settings\AiSettingsController;
+use App\Http\Controllers\Api\V1\ShopFactController;
 use App\Http\Controllers\Api\V1\Webhooks\InstagramWebhookController;
+use App\Http\Middleware\ResolveStoreFromPublicId;
 use App\Http\Middleware\VerifyInstagramSignature;
+use App\Http\Middleware\VerifyTelegramInitData;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -30,6 +36,20 @@ Route::prefix('v1')->group(function () {
     // Instagram OAuth callback is hit by Meta's browser redirect (no auth header).
     Route::get('integrations/instagram/callback', [IntegrationController::class, 'callback']);
 
+    // --- Telegram Mini App (public; customer auth via verified initData) ---
+    Route::prefix('mini-app')
+        ->middleware(VerifyTelegramInitData::class)
+        ->group(function () {
+            Route::prefix('stores/{store_public_id}')
+                ->middleware(ResolveStoreFromPublicId::class)
+                ->group(function () {
+                    Route::get('store', [MiniAppStoreController::class, 'show']);
+                    Route::get('products', [CatalogController::class, 'index']);
+                    Route::get('products/{product}', [CatalogController::class, 'show']);
+                    Route::post('orders', [MiniAppOrderController::class, 'store']);
+                });
+        });
+
     // --- Authenticated + store-scoped ---
     Route::middleware(['auth:sanctum', 'store'])->group(function () {
         Route::get('me', [AuthController::class, 'me']);
@@ -40,6 +60,7 @@ Route::prefix('v1')->group(function () {
         Route::get('integrations', [IntegrationController::class, 'index']);
         Route::get('integrations/instagram/connect-url', [IntegrationController::class, 'connectUrl']);
         Route::get('integrations/instagram/auth', [IntegrationController::class, 'auth']);
+        Route::post('integrations/telegram/connect', [IntegrationController::class, 'telegramConnect']);
         Route::delete('integrations/{channel}', [IntegrationController::class, 'destroy']);
 
         // Inventory
@@ -60,6 +81,13 @@ Route::prefix('v1')->group(function () {
         Route::get('leads', [LeadController::class, 'index']);
         Route::get('leads/{lead}', [LeadController::class, 'show']);
         Route::patch('leads/{lead}', [LeadController::class, 'update']);
+
+        // Shop facts (address, phone, working hours, delivery/return policy, ...)
+        Route::get('shop-facts', [ShopFactController::class, 'index']);
+        Route::post('shop-facts', [ShopFactController::class, 'store']);
+        Route::get('shop-facts/{shopFact}', [ShopFactController::class, 'show']);
+        Route::patch('shop-facts/{shopFact}', [ShopFactController::class, 'update']);
+        Route::delete('shop-facts/{shopFact}', [ShopFactController::class, 'destroy']);
 
         // AI settings
         Route::post('ai/prompt/generate', [AiSettingsController::class, 'generate']);

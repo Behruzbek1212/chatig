@@ -66,4 +66,35 @@ class IntegrationController extends ApiController
 
         return $this->ok(new ChannelResource($channel->refresh()));
     }
+
+    /**
+     * Telegram catalog uses ONE shared platform bot — no token to paste. This
+     * marks the store's telegram channel as connected and returns the deep link
+     * the owner shares so customers open the Mini App for their store.
+     */
+    public function telegramConnect(Request $request): JsonResponse
+    {
+        $store = $request->user()->store;
+
+        $channel = Channel::updateOrCreate(
+            ['store_id' => $store->id, 'type' => 'telegram'],
+            [
+                'status' => 'connected',
+                'username' => config('chatig.telegram.bot_username'),
+                'meta' => ['mini_app' => true],
+            ],
+        );
+
+        return $this->ok([
+            'channel' => new ChannelResource($channel),
+            'deep_link' => $this->telegramDeepLink($store->public_id),
+        ]);
+    }
+
+    private function telegramDeepLink(string $publicId): ?string
+    {
+        $username = config('chatig.telegram.bot_username');
+
+        return $username ? sprintf('https://t.me/%s/app?startapp=%s', $username, $publicId) : null;
+    }
 }

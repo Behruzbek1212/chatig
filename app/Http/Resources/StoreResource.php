@@ -13,6 +13,7 @@ class StoreResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'public_id' => $this->public_id,
             'name' => $this->name,
             'business_type' => $this->business_type,
             'status' => $this->status,

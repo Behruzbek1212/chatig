@@ -7,9 +7,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * @property int $id
+ * @property string $public_id
  * @property string $name
  * @property string $business_type
  * @property string $status
@@ -20,7 +22,14 @@ class Store extends Model
     /** @use HasFactory<StoreFactory> */
     use HasFactory;
 
-    protected $fillable = ['name', 'business_type', 'status', 'trial_ends_at'];
+    protected $fillable = ['public_id', 'name', 'business_type', 'status', 'trial_ends_at'];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Store $store): void {
+            $store->public_id ??= (string) Str::ulid();
+        });
+    }
 
     protected function casts(): array
     {
@@ -47,6 +56,11 @@ class Store extends Model
     public function conversations(): HasMany
     {
         return $this->hasMany(Conversation::class);
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
     }
 
     public function isOnTrial(): bool

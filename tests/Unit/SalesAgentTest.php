@@ -6,6 +6,8 @@ use App\Agents\DTO\AgentContext;
 use App\Agents\SalesAgent;
 use App\Agents\Tools\SaveLeadTool;
 use App\Agents\Tools\SearchInventoryTool;
+use App\Agents\Tools\SearchShopInfoTool;
+use App\Agents\Tools\ShareCatalogTool;
 use App\Models\Conversation;
 use App\Models\Customer;
 use App\Models\Store;
@@ -14,6 +16,7 @@ use App\Services\Inventory\InventoryService;
 use App\Services\Llm\FakeLlmClient;
 use App\Services\Llm\LlmToolCall;
 use App\Services\Llm\LlmTurn;
+use App\Services\ShopFacts\ShopFactService;
 use App\Support\Tenancy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -27,7 +30,9 @@ class SalesAgentTest extends TestCase
         return new SalesAgent(
             $llm,
             new SearchInventoryTool(app(InventoryService::class)),
+            new SearchShopInfoTool(app(ShopFactService::class)),
             new SaveLeadTool(new LeadService),
+            new ShareCatalogTool,
         );
     }
 
@@ -67,6 +72,34 @@ class SalesAgentTest extends TestCase
         // save_lead created a real lead scoped to the store.
         $this->assertSame(1, $store->leads()->count());
         $this->assertSame('+998901234567', $store->leads()->first()->phone);
+    }
+
+    public function test_search_shop_info_tool_runs_against_real_db(): void
+    {
+        $store = Store::factory()->create();
+        app(Tenancy::class)->set($store);
+
+        app(ShopFactService::class)->create($store, ['label' => 'Manzil', 'value' => 'Toshkent, Chilonzor tumani']);
+
+        $customer = Customer::factory()->create(['store_id' => $store->id, 'channel' => 'instagram']);
+        $conversation = Conversation::factory()->create([
+            'store_id' => $store->id, 'customer_id' => $customer->id, 'channel' => 'instagram',
+        ]);
+
+        $llm = (new FakeLlmClient)->script(
+            new LlmTurn(null, [new LlmToolCall('c1', 'search_shop_info', ['query' => 'manzil'])], 6),
+            new LlmTurn('Biz Toshkent, Chilonzor tumanida joylashganmiz.', [], 9),
+        );
+
+        $result = $this->agent($llm)->handle(new AgentContext(
+            conversation: $conversation,
+            userMessage: 'qayerda joylashgansiz',
+        ));
+
+        $this->assertStringContainsString('Chilonzor', $result->reply);
+        $this->assertSame('search_shop_info', $result->toolCalls[0]['name']);
+        $this->assertSame('Manzil', $result->toolCalls[0]['result']['results'][0]['label']);
+        $this->assertSame('Toshkent, Chilonzor tumani', $result->toolCalls[0]['result']['results'][0]['value']);
     }
 
     public function test_returns_reply_without_tools(): void

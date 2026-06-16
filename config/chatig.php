@@ -94,6 +94,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Telegram (shared platform bot + Mini App)
+    |--------------------------------------------------------------------------
+    | One platform bot opens the catalog Mini App for every store via deep
+    | link t.me/<bot_username>/app?startapp=<store_public_id>. The Mini App
+    | authenticates customers by verifying Telegram WebApp initData (HMAC with
+    | the bot token). There is NO Telegram AI chat yet — Mini App only.
+    */
+    'telegram' => [
+        'bot_username' => env('TELEGRAM_BOT_USERNAME'),
+        'mini_app_bot_token' => env('TELEGRAM_MINI_APP_BOT_TOKEN'),
+        'mini_app_url' => env('TELEGRAM_MINI_APP_URL', 'http://localhost:5174'),
+        'init_data_max_age' => (int) env('TELEGRAM_INIT_DATA_MAX_AGE', 3600), // seconds
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Frontend SPA
     |--------------------------------------------------------------------------
     */

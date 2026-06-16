@@ -7,6 +7,8 @@ use App\Agents\DTO\AgentResult;
 use App\Agents\Tools\Contracts\Tool;
 use App\Agents\Tools\SaveLeadTool;
 use App\Agents\Tools\SearchInventoryTool;
+use App\Agents\Tools\SearchShopInfoTool;
+use App\Agents\Tools\ShareCatalogTool;
 use App\Agents\Tools\ToolContext;
 use App\Services\Llm\Contracts\LlmClient;
 use App\Services\Llm\LlmToolCall;
@@ -22,6 +24,10 @@ class SalesAgent
 
     private const DEFAULT_SYSTEM_PROMPT = 'Siz do\'kon uchun yordamchi sotuvchisiz. '
         .'Narx va mavjudlikni faqat search_inventory natijasidan ayting. '
+        .'Manzil, telefon, ish vaqti yoki yetkazib berish haqida so\'ralsa, '
+        .'search_shop_info dan foydalaning. '
+        .'Mijoz mahsulotlarni ko\'rmoqchi yoki buyurtma bermoqchi bo\'lsa, '
+        .'get_catalog_link orqali katalog havolasini yuboring. '
         .'Mijoz qiziqsa save_lead bilan ma\'lumotini saqlang. Mijoz tilida javob bering.';
 
     /** @var array<string, Tool> */
@@ -30,11 +36,15 @@ class SalesAgent
     public function __construct(
         private readonly LlmClient $llm,
         SearchInventoryTool $searchInventory,
+        SearchShopInfoTool $searchShopInfo,
         SaveLeadTool $saveLead,
+        ShareCatalogTool $shareCatalog,
     ) {
         $this->tools = [
             $searchInventory->name() => $searchInventory,
+            $searchShopInfo->name() => $searchShopInfo,
             $saveLead->name() => $saveLead,
+            $shareCatalog->name() => $shareCatalog,
         ];
     }
 
