@@ -60,6 +60,21 @@ return [
             'report' => false,
         ],
 
+        // MinIO (S3-compatible). Ready for later — flip MEDIA_DISK=minio to use it.
+        'minio' => [
+            'driver' => 's3',
+            'key' => env('MINIO_ACCESS_KEY', 'minioadmin'),
+            'secret' => env('MINIO_SECRET_KEY', 'minioadmin'),
+            'region' => env('MINIO_REGION', 'us-east-1'),
+            'bucket' => env('MINIO_BUCKET', 'chatig'),
+            'url' => env('MINIO_URL'),                 // public base URL for serving objects
+            'endpoint' => env('MINIO_ENDPOINT', 'http://minio:9000'),
+            'use_path_style_endpoint' => true,         // required by MinIO
+            'visibility' => 'public',
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*

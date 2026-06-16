@@ -33,6 +33,6 @@ class ProductImage extends Model
 
     public function url(): string
     {
-        return Storage::disk('public')->url($this->path);
+        return Storage::disk(config('chatig.media_disk'))->url($this->path);
     }
 }

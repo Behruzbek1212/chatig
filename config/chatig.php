@@ -65,6 +65,10 @@ return [
             'intent' => env('OPENAI_MODEL_INTENT', 'gpt-4o-mini'),
             'prompt_generator' => env('OPENAI_MODEL_PROMPT', 'gpt-4o'),
         ],
+        'embedding' => [
+            'model' => env('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small'),
+            'dimensions' => (int) env('OPENAI_EMBEDDING_DIMENSIONS', 1536),
+        ],
     ],
 
     /*
@@ -94,4 +98,13 @@ return [
     |--------------------------------------------------------------------------
     */
     'spa_url' => env('SPA_URL', 'http://localhost:5173'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Media storage disk (product images)
+    |--------------------------------------------------------------------------
+    | 'public' = local filesystem (default for now). Switch to 'minio' when the
+    | MinIO/S3 bucket is ready — no code changes needed.
+    */
+    'media_disk' => env('MEDIA_DISK', 'public'),
 ];

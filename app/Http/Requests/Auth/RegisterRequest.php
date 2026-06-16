@@ -13,10 +13,30 @@ class RegisterRequest extends FormRequest
         return true;
     }
 
+    /**
+     * UI labels → canonical business_type slugs, so the dashboard (which shows
+     * labels) and API clients (which may send slugs) both work.
+     */
+    private const BUSINESS_TYPE_LABELS = [
+        'elektronika' => 'elektronika',
+        'kiyim-kechak' => 'kiyim',
+        'kiyim' => 'kiyim',
+        'kosmetika' => 'kosmetika',
+        'oziq-ovqat' => 'oziq_ovqat',
+        'oziq_ovqat' => 'oziq_ovqat',
+        'aksessuar' => 'aksessuar',
+        'maishiy texnika' => 'maishiy_texnika',
+        'maishiy_texnika' => 'maishiy_texnika',
+        'boshqa' => 'boshqa',
+    ];
+
     protected function prepareForValidation(): void
     {
+        $rawType = mb_strtolower(trim((string) $this->input('business_type')));
+
         $this->merge([
             'phone' => PhoneNumber::normalize((string) $this->input('phone')) ?? $this->input('phone'),
+            'business_type' => self::BUSINESS_TYPE_LABELS[$rawType] ?? $this->input('business_type'),
         ]);
     }
 

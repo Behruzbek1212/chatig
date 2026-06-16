@@ -31,6 +31,17 @@ class IntegrationTest extends TestCase
         return User::factory()->create(['store_id' => Store::factory()->create()->id]);
     }
 
+    public function test_connect_url_requires_instagram_credentials(): void
+    {
+        config()->set('chatig.instagram.app_id', '');
+        config()->set('chatig.instagram.redirect_uri', '');
+
+        $this->actingAs($this->owner())
+            ->getJson('/api/v1/integrations/instagram/connect-url')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Instagram integratsiyasi sozlanmagan. INSTAGRAM_APP_ID va INSTAGRAM_REDIRECT_URI ni .env faylida to\'ldiring.');
+    }
+
     public function test_connect_url_uses_instagram_authorize_with_business_scopes(): void
     {
         $url = $this->actingAs($this->owner())->getJson('/api/v1/integrations/instagram/connect-url')

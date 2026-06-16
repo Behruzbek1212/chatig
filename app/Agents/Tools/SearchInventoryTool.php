@@ -44,7 +44,7 @@ class SearchInventoryTool extends AbstractTool
             return ['results' => []];
         }
 
-        $results = $this->inventory->search($context->store, $query)
+        $results = $this->inventory->semanticSearch($context->store, $query)
             ->map(fn ($product) => [
                 'name' => $product->name,
                 'price' => $product->price,

@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\DB;
 
 class InventoryService
 {
+    public function __construct(private readonly ProductEmbeddingService $embeddings) {}
+
     /**
      * Create a product. Initial quantity is applied via a stock movement,
      * never written directly (CLAUDE.md rule #3).
@@ -38,6 +40,8 @@ class InventoryService
                 $product->save();
             }
 
+            $this->embeddings->embed($product);
+
             return $product->refresh();
         });
     }
@@ -54,6 +58,8 @@ class InventoryService
             'name', 'description', 'price', 'category', 'condition', 'brand',
         ])->all());
         $product->save();
+
+        $this->embeddings->embed($product);
 
         return $product->refresh();
     }
@@ -87,6 +93,35 @@ class InventoryService
             ->orderByDesc('quantity')
             ->limit(20)
             ->get();
+    }
+
+    /**
+     * Semantic (pgvector) search by natural-language query, falling back to
+     * keyword search when embeddings are unavailable (non-pgsql, no credit,
+     * or no embedded products yet).
+     *
+     * @return Collection<int, Product>
+     */
+    public function semanticSearch(Store $store, string $query, int $limit = 20): Collection
+    {
+        if (! $this->embeddings->enabled()) {
+            return $this->search($store, $query);
+        }
+
+        $literal = $this->embeddings->queryLiteral($query);
+
+        if ($literal === null) {
+            return $this->search($store, $query);
+        }
+
+        $results = Product::query()
+            ->where('store_id', $store->id)
+            ->whereNotNull('embedding')
+            ->orderByRaw('embedding <=> ?::vector', [$literal])
+            ->limit($limit)
+            ->get();
+
+        return $results->isNotEmpty() ? $results : $this->search($store, $query);
     }
 
     private function recordMovement(Product $product, string $type, int $qtyChange, ?string $reason): void

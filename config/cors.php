@@ -10,7 +10,11 @@ return [
         env('SPA_URL', 'http://localhost:5173'),
     ]),
 
-    'allowed_origins_patterns' => [],
+    // Dev convenience: allow any localhost / 127.0.0.1 port (vite, etc.).
+    // Production locks down to the explicit SPA_URL above.
+    'allowed_origins_patterns' => [
+        '/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/',
+    ],
 
     'allowed_headers' => ['*'],
 

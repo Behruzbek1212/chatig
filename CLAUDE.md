@@ -4,8 +4,8 @@ AI-powered sales automation platform for social-media sellers in Uzbekistan (Ins
 
 ## Stack
 
-- PHP 8.5 / Laravel 13, MySQL 8.4, Redis (queue + cache + debounce timers)
-- Tests run on sqlite in-memory (see phpunit.xml); app/queue run on MySQL/Redis via Sail
+- PHP 8.5 / Laravel 13, **PostgreSQL 16 + pgvector** (`pgvector/pgvector:pg16`), Redis (queue + cache + debounce timers)
+- Tests run on sqlite in-memory (see phpunit.xml); app/queue run on Postgres/Redis via Sail. pgvector-only DDL/queries are guarded by `DB::getDriverName() === 'pgsql'` so the sqlite suite skips them and code falls back to keyword search.
 - Docker via Laravel Sail (`docker compose up -d`, app on **port 8080**)
 - OpenAI API via `openai-php/laravel` (`gpt-4o` for sales conversation, `gpt-4o-mini` for intent detection)
 - **This repo is a pure API backend** — no Blade views, no Inertia, no Filament. JSON only.
@@ -49,7 +49,9 @@ app/
 ├── Services/
 │   ├── Llm/Contracts/LlmClient.php  # DIP: agents depend on this, never on OpenAI directly
 │   ├── Llm/OpenAiClient.php
-│   ├── Inventory/InventoryService.php   # search, product CRUD, stock movements
+│   ├── Inventory/InventoryService.php   # keyword + semanticSearch (pgvector), CRUD, stock movements
+│   ├── Inventory/ProductEmbeddingService.php  # writes products.embedding (pgvector); non-fatal, pgsql-only
+│   ├── Llm/OpenAiEmbeddingClient.php / FakeEmbeddingClient.php  # EmbeddingClient (text-embedding-3-small)
 │   ├── Crm/LeadService.php
 │   ├── Orders/OrderService.php
 │   └── Channels/InstagramService.php    # Instagram API with Instagram Login (OAuth + send DM); TelegramChannel (later)

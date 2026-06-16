@@ -30,9 +30,18 @@ class InstagramService
      */
     public function connectUrl(Store $store): string
     {
+        $appId = config('chatig.instagram.app_id');
+        $redirectUri = config('chatig.instagram.redirect_uri');
+
+        if (! is_string($appId) || $appId === '' || ! is_string($redirectUri) || $redirectUri === '') {
+            throw new InstagramException(
+                'Instagram integratsiyasi sozlanmagan. INSTAGRAM_APP_ID va INSTAGRAM_REDIRECT_URI ni .env faylida to\'ldiring.',
+            );
+        }
+
         $params = http_build_query([
-            'client_id' => config('chatig.instagram.app_id'),
-            'redirect_uri' => config('chatig.instagram.redirect_uri'),
+            'client_id' => $appId,
+            'redirect_uri' => $redirectUri,
             'response_type' => 'code',
             'scope' => implode(',', config('chatig.instagram.scopes')),
             'state' => Crypt::encryptString((string) $store->id),

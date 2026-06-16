@@ -1,0 +1,479 @@
+{
+  "info": {
+    "name": "ChatiG API",
+    "description": "ChatiG — AI sales platform API. Base URL va token collection variables'da. Auth verify endpoint'lari tokenni avtomatik saqlaydi.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "phone", "value": "901234567", "type": "string" },
+    { "key": "product_id", "value": "", "type": "string" },
+    { "key": "image_id", "value": "", "type": "string" },
+    { "key": "channel_id", "value": "", "type": "string" },
+    { "key": "lead_id", "value": "", "type": "string" },
+    { "key": "instagram_app_secret", "value": "", "type": "string" },
+    { "key": "instagram_verify_token", "value": "verify-123", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/auth/register", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"company_name\": \"Texno Do'kon\",\n  \"business_type\": \"elektronika\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Yangi do'kon + user yaratadi, OTP yuboradi. SMS log driverda bo'lsa kod storage/logs/laravel.log da."
+          }
+        },
+        {
+          "name": "Register · Verify",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "if (d && d.token) { pm.collectionVariables.set('token', d.token); console.log('token saqlandi'); }",
+                  "pm.test('status ok', () => pm.response.code === 200);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/auth/register/verify", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "register", "verify"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"code\": \"123456\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "OTP kodni tasdiqlaydi va tokenni qaytaradi (avtomatik saqlanadi)."
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/auth/login", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Login · Verify",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "if (d && d.token) { pm.collectionVariables.set('token', d.token); }",
+                  "pm.test('status ok', () => pm.response.code === 200);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/auth/login/verify", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "login", "verify"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"code\": \"123456\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/me", "host": ["{{base_url}}"], "path": ["api", "v1", "me"] }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/auth/logout", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "logout"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/dashboard/summary", "host": ["{{base_url}}"], "path": ["api", "v1", "dashboard", "summary"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Integrations",
+      "item": [
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/integrations", "host": ["{{base_url}}"], "path": ["api", "v1", "integrations"] }
+          }
+        },
+        {
+          "name": "Instagram · Connect URL",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/integrations/instagram/connect-url", "host": ["{{base_url}}"], "path": ["api", "v1", "integrations", "instagram", "connect-url"] },
+            "description": "Instagram OAuth dialog URL'ini qaytaradi. Bu URL'ni brauzerda ochib akkauntni ulaysiz."
+          }
+        },
+        {
+          "name": "Instagram · Callback (reference)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/integrations/instagram/callback?code=CODE&state=STATE",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "integrations", "instagram", "callback"],
+              "query": [
+                { "key": "code", "value": "CODE" },
+                { "key": "state", "value": "STATE" }
+              ]
+            },
+            "description": "Instagram brauzer redirect bilan o'zi chaqiradi — qo'lda ishlatilmaydi, faqat ma'lumot uchun."
+          }
+        },
+        {
+          "name": "Disconnect channel",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/integrations/{{channel_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "integrations", "{{channel_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products (Sklad)",
+      "item": [
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/products?q=&category=&status=&sort=created_at&direction=desc&per_page=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "products"],
+              "query": [
+                { "key": "q", "value": "" },
+                { "key": "category", "value": "" },
+                { "key": "status", "value": "" },
+                { "key": "sort", "value": "created_at" },
+                { "key": "direction", "value": "desc" },
+                { "key": "per_page", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create (with images)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "if (d && d.id) { pm.collectionVariables.set('product_id', d.id); }",
+                  "if (d && d.images && d.images[0]) { pm.collectionVariables.set('image_id', d.images[0].id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/products", "host": ["{{base_url}}"], "path": ["api", "v1", "products"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "RTX 4060 Gaming OC", "type": "text" },
+                { "key": "price", "value": "4200000", "type": "text" },
+                { "key": "quantity", "value": "2", "type": "text" },
+                { "key": "description", "value": "Yangi videokarta, kafolat bilan", "type": "text" },
+                { "key": "category", "value": "videokarta", "type": "text" },
+                { "key": "condition", "value": "new", "type": "text" },
+                { "key": "brand", "value": "Asus", "type": "text" },
+                { "key": "images[]", "type": "file", "src": [] }
+              ]
+            },
+            "description": "Multipart. images[] — 10 tagacha rasm fayl tanlang (ixtiyoriy)."
+          }
+        },
+        {
+          "name": "Show",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/products/{{product_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "products", "{{product_id}}"] }
+          }
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/products/{{product_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "products", "{{product_id}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"RTX 4060 Gaming OC (yangilangan)\",\n  \"price\": 4100000\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/products/{{product_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "products", "{{product_id}}"] }
+          }
+        },
+        {
+          "name": "Stock movements",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/products/{{product_id}}/movements", "host": ["{{base_url}}"], "path": ["api", "v1", "products", "{{product_id}}", "movements"] }
+          }
+        },
+        {
+          "name": "Images · Add",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/products/{{product_id}}/images", "host": ["{{base_url}}"], "path": ["api", "v1", "products", "{{product_id}}", "images"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "images[]", "type": "file", "src": [] }]
+            }
+          }
+        },
+        {
+          "name": "Images · Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/products/{{product_id}}/images/{{image_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "products", "{{product_id}}", "images", "{{image_id}}"] }
+          }
+        },
+        {
+          "name": "Images · Reorder",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/products/{{product_id}}/images/reorder", "host": ["{{base_url}}"], "path": ["api", "v1", "products", "{{product_id}}", "images", "reorder"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order\": [3, 1, 2]\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Images · Set primary",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/products/{{product_id}}/images/{{image_id}}/primary", "host": ["{{base_url}}"], "path": ["api", "v1", "products", "{{product_id}}", "images", "{{image_id}}", "primary"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Leads (CRM)",
+      "item": [
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/leads?period=&status=&q=&per_page=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "leads"],
+              "query": [
+                { "key": "period", "value": "", "description": "today | week" },
+                { "key": "status", "value": "", "description": "new | contacted | closed" },
+                { "key": "q", "value": "" },
+                { "key": "per_page", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Show",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/leads/{{lead_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "leads", "{{lead_id}}"] }
+          }
+        },
+        {
+          "name": "Update (status/notes)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/leads/{{lead_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "leads", "{{lead_id}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"contacted\",\n  \"notes\": \"Bog'lanildi, ertaga keladi\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI Settings",
+      "item": [
+        {
+          "name": "Prompt · Generate",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/ai/prompt/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "ai", "prompt", "generate"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tone\": \"dostona\",\n  \"out_of_stock_behavior\": \"Tovar tugagan bo'lsa, o'xshashini taklif qil\",\n  \"haggling_policy\": \"Chegirma bermaymiz, lekin xushmuomala bo'l\",\n  \"after_hours_behavior\": \"Ish vaqtidan tashqarida ertalab javob berishni ayt\",\n  \"extra_notes\": \"Yetkazib berish bor\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Strukturali xohishlardan tayyor system prompt generatsiya qiladi (guardrail'lar majburan qo'shiladi). OpenAI krediti kerak."
+          }
+        },
+        {
+          "name": "Prompt · Test",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/ai/prompt/test", "host": ["{{base_url}}"], "path": ["api", "v1", "ai", "prompt", "test"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"Siz Texno Do'kon sotuvchisisiz. Xushmuomala bo'ling.\",\n  \"message\": \"Salom, RTX 4060 bormi?\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Settings · Get",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/ai/settings", "host": ["{{base_url}}"], "path": ["api", "v1", "ai", "settings"] }
+          }
+        },
+        {
+          "name": "Settings · Save",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/ai/settings", "host": ["{{base_url}}"], "path": ["api", "v1", "ai", "settings"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"system_prompt\": \"Siz Texno Do'kon sotuvchisisiz...\",\n  \"mode\": \"suggest\",\n  \"working_hours\": { \"from\": \"09:00\", \"to\": \"21:00\" }\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks (Instagram)",
+      "item": [
+        {
+          "name": "Verify (GET handshake)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/webhooks/instagram?hub.mode=subscribe&hub.verify_token={{instagram_verify_token}}&hub.challenge=12345",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "webhooks", "instagram"],
+              "query": [
+                { "key": "hub.mode", "value": "subscribe" },
+                { "key": "hub.verify_token", "value": "{{instagram_verify_token}}" },
+                { "key": "hub.challenge", "value": "12345" }
+              ]
+            },
+            "description": "Meta handshake. To'g'ri token bo'lsa hub.challenge qaytadi."
+          }
+        },
+        {
+          "name": "Incoming DM (POST, auto-signed)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// X-Hub-Signature-256 ni body + app_secret dan avtomatik hisoblaydi",
+                  "const secret = pm.collectionVariables.get('instagram_app_secret') || '';",
+                  "const body = pm.request.body && pm.request.body.raw ? pm.request.body.raw : '';",
+                  "const sig = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.request.headers.upsert({ key: 'X-Hub-Signature-256', value: 'sha256=' + sig });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/webhooks/instagram", "host": ["{{base_url}}"], "path": ["api", "v1", "webhooks", "instagram"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"object\": \"instagram\",\n  \"entry\": [\n    {\n      \"id\": \"IG_BUSINESS_ACCOUNT_ID\",\n      \"messaging\": [\n        {\n          \"sender\": { \"id\": \"customer-99\" },\n          \"recipient\": { \"id\": \"IG_BUSINESS_ACCOUNT_ID\" },\n          \"message\": { \"mid\": \"mid-1\", \"text\": \"Salom, RTX 4060 bormi?\" }\n        }\n      ]\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "instagram_app_secret variable'ni to'ldiring va entry.id ni ulangan kanal external_id'siga moslang. Imzo pre-request skriptida avtomatik hisoblanadi."
+          }
+        }
+      ]
+    }
+  ]
+}

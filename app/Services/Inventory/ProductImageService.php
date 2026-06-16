@@ -24,8 +24,10 @@ class ProductImageService
             $position = (int) $product->images()->max('position');
             $hasPrimary = $product->images()->where('is_primary', true)->exists();
 
+            $disk = config('chatig.media_disk');
+
             foreach ($files as $file) {
-                $path = $file->store("products/{$product->id}", 'public');
+                $path = $file->store("products/{$product->id}", $disk);
 
                 /** @var ProductImage $image */
                 $image = $product->images()->create([
@@ -44,7 +46,7 @@ class ProductImageService
 
     public function deleteImage(ProductImage $image): void
     {
-        Storage::disk('public')->delete($image->path);
+        Storage::disk(config('chatig.media_disk'))->delete($image->path);
         $wasPrimary = $image->is_primary;
         $product = $image->product;
         $image->delete();

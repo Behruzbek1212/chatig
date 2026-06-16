@@ -29,6 +29,17 @@ class IntegrationController extends ApiController
     }
 
     /**
+     * Browser redirect endpoint — opens Instagram OAuth directly in a popup.
+     * No JSON: the popup window navigates here and gets redirected to Instagram.
+     */
+    public function auth(Request $request): RedirectResponse
+    {
+        $url = $this->instagram->connectUrl($request->user()->store);
+
+        return redirect()->away($url);
+    }
+
+    /**
      * Public endpoint hit by Instagram's browser redirect. Resolves the store
      * from the signed state, then redirects back to the SPA with status.
      */

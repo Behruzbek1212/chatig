@@ -39,6 +39,7 @@ Route::prefix('v1')->group(function () {
         // Integrations
         Route::get('integrations', [IntegrationController::class, 'index']);
         Route::get('integrations/instagram/connect-url', [IntegrationController::class, 'connectUrl']);
+        Route::get('integrations/instagram/auth', [IntegrationController::class, 'auth']);
         Route::delete('integrations/{channel}', [IntegrationController::class, 'destroy']);
 
         // Inventory
