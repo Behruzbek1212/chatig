@@ -106,6 +106,13 @@ return [
         'mini_app_bot_token' => env('TELEGRAM_MINI_APP_BOT_TOKEN'),
         'mini_app_url' => env('TELEGRAM_MINI_APP_URL', 'http://localhost:5174'),
         'init_data_max_age' => (int) env('TELEGRAM_INIT_DATA_MAX_AGE', 3600), // seconds
+        // Telegram's Ed25519 public key (hex) for token-independent initData
+        // signature verification. Real Telegram clients (e.g. tdesktop) send a
+        // `signature` field validated against this key. Default = production key.
+        'init_data_public_key' => env(
+            'TELEGRAM_INIT_DATA_PUBLIC_KEY',
+            'e7bf03a2fa4602af4580703d88dda5bb59f32ed8b02a56c187fe7d34caed242d'
+        ),
     ],
 
     /*

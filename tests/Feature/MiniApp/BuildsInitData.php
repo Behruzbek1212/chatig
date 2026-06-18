@@ -34,7 +34,9 @@ trait BuildsInitData
         ksort($pairs);
         $dataCheckString = collect($pairs)->map(fn ($v, $k) => "$k=$v")->implode("\n");
 
-        $secretKey = hash_hmac('sha256', $this->botToken, 'WebAppData', true);
+        // Sign exactly like Telegram: secret = HMAC(data="WebAppData", key=token).
+        // hash_hmac($algo, $data, $key) -> token is the KEY (3rd arg).
+        $secretKey = hash_hmac('sha256', 'WebAppData', $this->botToken, true);
         $hash = hash_hmac('sha256', $dataCheckString, $secretKey);
 
         $pairs['hash'] = $hash;

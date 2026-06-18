@@ -23,6 +23,21 @@ class VerifyTelegramInitData
         $token = (string) config('chatig.telegram.mini_app_bot_token');
         $initData = (string) $request->header('X-Telegram-Init-Data', '');
 
+        // Local dev bypass: skip HMAC verification when no initData is sent
+        // and the app is running in local environment. Injects a fake TG user
+        // so downstream code (ResolveStoreFromPublicId, controllers) works.
+        if ($initData === '' && app()->environment('local')) {
+            $request->attributes->set('tg_user', [
+                'id' => 0,
+                'first_name' => 'Dev',
+                'username' => 'dev_user',
+            ]);
+            $request->attributes->set('tg_start_param', '');
+            $request->attributes->set('tg_init_data', '');
+
+            return $next($request);
+        }
+
         if ($token === '' || $initData === '') {
             abort(403, 'Invalid init data.');
         }
@@ -41,10 +56,18 @@ class VerifyTelegramInitData
             ->map(fn ($value, $key) => $key.'='.$value)
             ->implode("\n");
 
-        $secretKey = hash_hmac('sha256', $token, 'WebAppData', true);
+        // Per Telegram spec the secret key is HMAC over the literal string
+        // "WebAppData" using the bot token as the KEY — i.e. data="WebAppData",
+        // key=$token. hash_hmac()'s signature is ($algo, $data, $key), so the
+        // token must be the 3rd argument, not the 2nd.
+        $secretKey = hash_hmac('sha256', 'WebAppData', $token, true);
         $expected = hash_hmac('sha256', $dataCheckString, $secretKey);
 
-        if (! hash_equals($expected, $hash)) {
+        // Primary check: HMAC over the bot token (Telegram's classic scheme,
+        // also what our test suite signs with). Real Telegram clients (e.g.
+        // tdesktop) additionally send an Ed25519 `signature`; some payloads do
+        // not validate via HMAC but do via that signature, so fall back to it.
+        if (! hash_equals($expected, $hash) && ! $this->signatureValid($pairs, $token)) {
             abort(403, 'Invalid init data.');
         }
 
@@ -64,5 +87,43 @@ class VerifyTelegramInitData
         $request->attributes->set('tg_init_data', $initData);
 
         return $next($request);
+    }
+
+    /**
+     * Telegram's token-independent initData verification (third-party scheme):
+     *   data_check = "{bot_id}:WebAppData\n" + fields (except hash & signature),
+     *                sorted by key, joined with "\n"
+     *   valid      = Ed25519_verify(signature, data_check, telegram_public_key)
+     * See https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+     *
+     * @param  array<string, string>  $pairs  parsed initData pairs (hash already removed)
+     */
+    private function signatureValid(array $pairs, string $token): bool
+    {
+        $signature = (string) ($pairs['signature'] ?? '');
+        $publicKey = (string) config('chatig.telegram.init_data_public_key');
+        if ($signature === '' || $publicKey === '' || ! function_exists('sodium_crypto_sign_verify_detached')) {
+            return false;
+        }
+
+        $botId = explode(':', $token, 2)[0];
+
+        $fields = $pairs;
+        unset($fields['signature']);
+        ksort($fields);
+        $dataCheckString = $botId.':WebAppData'."\n".collect($fields)
+            ->map(fn ($value, $key) => $key.'='.$value)
+            ->implode("\n");
+
+        // signature is base64url; pad and translate to standard base64 before decode.
+        $b64 = strtr($signature, '-_', '+/');
+        $b64 .= str_repeat('=', (4 - strlen($b64) % 4) % 4);
+        $signatureBin = base64_decode($b64, true);
+        $publicKeyBin = @hex2bin($publicKey);
+        if ($signatureBin === false || $publicKeyBin === false || strlen($publicKeyBin) !== 32) {
+            return false;
+        }
+
+        return sodium_crypto_sign_verify_detached($signatureBin, $dataCheckString, $publicKeyBin);
     }
 }

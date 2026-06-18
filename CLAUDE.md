@@ -1,110 +1,100 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # ChatiG — AI Sales Platform
 
-AI-powered sales automation platform for social-media sellers in Uzbekistan (Instagram channel built; Telegram later). A shop owner connects their Instagram account; an AI agent answers customers from the shop's real inventory and collects leads into a mini CRM. Paid SaaS from day one (subscription per store).
+AI-powered sales automation for social-media sellers in Uzbekistan. A shop owner connects their Instagram account; an AI agent answers customers from the shop's real inventory and collects leads into a mini CRM. A Telegram Mini App serves the catalog + checkout to customers. Paid SaaS (subscription per store).
 
 ## Stack
 
-- PHP 8.5 / Laravel 13, **PostgreSQL 16 + pgvector** (`pgvector/pgvector:pg16`), Redis (queue + cache + debounce timers)
-- Tests run on sqlite in-memory (see phpunit.xml); app/queue run on Postgres/Redis via Sail. pgvector-only DDL/queries are guarded by `DB::getDriverName() === 'pgsql'` so the sqlite suite skips them and code falls back to keyword search.
-- Docker via Laravel Sail (`docker compose up -d`, app on **port 8080**)
-- OpenAI API via `openai-php/laravel` (`gpt-4o` for sales conversation, `gpt-4o-mini` for intent detection)
-- **This repo is a pure API backend** — no Blade views, no Inertia, no Filament. JSON only.
-- Frontend (web dashboard) is a **separate project/repo** (Vue SPA or similar) consuming `/api/v1` — never add UI pages here.
-- Admin needs in MVP are served via the same API (admin-role endpoints) or artisan commands — no admin UI package in this repo.
-- Code style: Pint. Static analysis: Larastan.
-- Future clients (do NOT build now): Flutter mobile app, TG Mini App frontend, marketing site
+- PHP `^8.3` / Laravel `^13.8`, **PostgreSQL 16 + pgvector**, Redis (queue + cache)
+- **Pure API backend** — JSON only, no Blade/Inertia/Filament/admin UI. The web dashboard SPA and the Mini App frontend live in **separate repos** and consume `/api/v1`. Never add UI pages here.
+- Auth: Sanctum tokens for the dashboard SPA; **phone + SMS OTP** login/registration (no passwords). Mini App customers authenticate via verified Telegram WebApp `initData`.
+- OpenAI via direct HTTP client (`OpenAiClient`), `gpt-4o` for sales, `text-embedding-3-small` for embeddings.
+- Docker via Laravel Sail (app on **port 8080**). Code style: Pint. Static analysis: Larastan.
+- **Tests run on sqlite in-memory** (see `phpunit.xml`); app/queue run on Postgres/Redis. pgvector DDL/queries are guarded by `DB::getDriverName() === 'pgsql'` so sqlite skips them and falls back to keyword search.
 
 ## Commands
 
-All PHP commands run inside Docker:
+PHP commands run inside Docker (Windows host; project lives under a OneDrive path with Cyrillic chars — always quote paths):
 
 ```bash
-docker compose exec laravel.test php artisan <cmd>
 docker compose exec laravel.test php artisan test
+docker compose exec laravel.test php artisan test --filter SalesAgentTest   # single test/class
 docker compose exec laravel.test ./vendor/bin/pint
 docker compose exec laravel.test ./vendor/bin/phpstan analyse
 ```
 
-Windows host; project lives under OneDrive path with Cyrillic chars — always quote paths.
+Run `pint` + `phpstan` before committing.
 
 ## Architecture (modular monolith, API-first)
 
-Single Laravel app, strict module boundaries, one deploy. Do NOT split into microservices. Processes are separated at runtime only: web (webhooks + API + dashboard), queue worker (all AI calls), scheduler.
+Single Laravel app, strict module boundaries, one deploy. **Do NOT split into microservices.** Runtime processes only: web (webhooks + API), queue worker (all AI calls), scheduler.
 
-**API-first rule:** every client (TG bot, separate web dashboard SPA, future Flutter app, TG Mini App) consumes the same business logic. Controllers and bot handlers are thin; ALL business logic lives in `app/Services/` and `app/Agents/`. The bot calls the same services the API does — never duplicate logic per client.
-
-**Auth & API conventions for external SPA clients:** Sanctum token auth, CORS configured for the dashboard origin, consistent JSON envelope via API Resources, versioned routes (`/api/v1/...`). Breaking API changes require a new version — external frontends deploy independently.
+**API-first rule:** controllers and the inbound-message job are thin; ALL business logic lives in `app/Services/` and `app/Agents/`. Every client (dashboard SPA, Mini App, future Flutter) calls the same services.
 
 ```
 app/
-├── Agents/                  # AI layer (Strategy pattern)
-│   ├── Contracts/Agent.php  # handle(AgentContext): AgentResult
-│   ├── AbstractAgent.php    # OpenAI call + tool-calling loop + retry
-│   ├── IntentDetectionAgent.php   # gpt-4o-mini: intent + language
-│   ├── SalesAgent.php             # main customer conversation (tools)
-│   ├── OrderCollectorAgent.php    # collects name/phone/address
-│   ├── ProductEntryAgent.php      # photo+voice/text → product card draft
-│   ├── AgentRegistry.php          # intent → agent (Factory)
-│   └── DTO/                       # AgentContext, AgentResult, ToolCall
+├── Agents/
+│   ├── SalesAgent.php            # customer conversation; tool-calling loop, MAX_ITERATIONS=5
+│   ├── DTO/                      # AgentContext (in), AgentResult (out)
+│   └── Tools/                    # the ONLY way the model touches real data
+│       ├── Contracts/Tool.php    # name/description/parameters/handle
+│       ├── AbstractTool.php      # builds OpenAI function definition()
+│       ├── ToolContext.php       # store + conversation + customer passed to every tool
+│       ├── SearchInventoryTool / SearchShopInfoTool / SaveLeadTool / ShareCatalogTool
 ├── Services/
-│   ├── Llm/Contracts/LlmClient.php  # DIP: agents depend on this, never on OpenAI directly
-│   ├── Llm/OpenAiClient.php
-│   ├── Inventory/InventoryService.php   # keyword + semanticSearch (pgvector), CRUD, stock movements
-│   ├── Inventory/ProductEmbeddingService.php  # writes products.embedding (pgvector); non-fatal, pgsql-only
-│   ├── Llm/OpenAiEmbeddingClient.php / FakeEmbeddingClient.php  # EmbeddingClient (text-embedding-3-small)
+│   ├── Llm/        # LlmClient (DIP) — OpenAiClient | FakeLlmClient; EmbeddingClient — OpenAi | Fake
+│   ├── Inventory/  # InventoryService (keyword + pgvector semanticSearch, stock movements), ProductEmbeddingService, ProductImageService
+│   ├── ShopFacts/  # ShopFactService + embeddings (address/phone/hours/delivery, semantic lookup)
 │   ├── Crm/LeadService.php
 │   ├── Orders/OrderService.php
-│   └── Channels/InstagramService.php    # Instagram API with Instagram Login (OAuth + send DM); TelegramChannel (later)
-├── Jobs/
-│   ├── ProcessIncomingInstagramMessage.php  # inbound IG DM pipeline (queued — webhook returns 200 fast)
-│   └── SendChannelMessage.php       # (later) outbound with retry for other channels
-├── Http/Controllers/
-│   ├── Webhooks/InstagramWebhookController.php  # GET verify + POST receive (signature-checked); Telegram (later)
-│   └── Api/V1/      # versioned REST API (Sanctum auth) — dashboard SPA, mini app, Flutter
-└── Models/  # Store, User, Channel, Product, StockMovement, Customer, Conversation, Message, Lead, Order, Subscription
+│   ├── Channels/InstagramService.php   # Instagram OAuth + send DM
+│   ├── Auth/       # OtpService, Ai/PromptGeneratorService, Ai/AiSettingsService
+│   └── Sms/        # SmsSender (DIP) — LogSmsSender (dev) | EskizSmsSender (Eskiz.uz)
+├── Jobs/ProcessIncomingInstagramMessage.php   # inbound IG DM pipeline (queued)
+├── Http/
+│   ├── Controllers/Api/V1/      # dashboard endpoints; MiniApp/ subfolder for Mini App
+│   ├── Controllers/Api/V1/Webhooks/InstagramWebhookController.php
+│   ├── Middleware/  # ResolveStore, ResolveStoreFromPublicId, VerifyInstagramSignature, VerifyTelegramInitData
+│   └── Resources/   # API Resources (JSON envelope)
+├── Support/Tenancy.php          # holds the current tenant Store for the request
+└── Models/  # Store, User, Channel, Product, ProductImage, StockMovement, Customer,
+             # Conversation, Message, Lead, Order, OrderItem, ShopFact, AiConfig, OtpCode
 ```
 
-Patterns in use: Strategy (agents), Factory/Registry (AgentRegistry), DTO (typed agent I/O), Adapter (channels), DIP (LlmClient). Deliberately NOT used for MVP: Repository pattern, CQRS, event sourcing, multi-LLM providers.
+Patterns: Strategy (tools), DTO (agent I/O), Adapter (channels), DIP (`LlmClient`, `EmbeddingClient`, `SmsSender`, bound by driver in `AppServiceProvider`).
+
+### Conventions
+
+- **API responses:** controllers extend `ApiController` — use `ok($data, $meta)` / `message($str)`. Envelope is `{ "data": ..., "meta"?: ... }`. Wrap models in `Http/Resources/`.
+- **DI bindings** live in `AppServiceProvider::register` and switch on config drivers (`chatig.llm.driver`, `chatig.sms.driver`) — set `LLM_DRIVER`/`SMS_DRIVER`. `Tenancy` is a singleton.
+- **Config** is centralized in `config/chatig.php` (OTP, SMS, LLM models, Instagram, Telegram, trial). Read via `config('chatig.*')`.
+- **Seller-facing copy is Uzbek** (in code: prompts, SMS, error messages).
 
 ## Non-negotiable domain rules
 
-1. **AI never invents facts.** Price, stock, product details come ONLY from tool calls (`search_inventory`, `get_product_details`, `create_lead`, `create_order_draft`, `escalate_to_human`). There is NO tool to change prices or grant discounts — the AI must be structurally unable to do it. Hallucinated price = dead product.
-2. **Multi-tenancy from day one.** Every domain table has `store_id`; models use the `BelongsToStore` trait/global scope. Never query across stores. One DB, no DB-per-tenant.
-3. **Stock is derived from `stock_movements`** (append-only in/out records), never written directly to a column. Sellers must be able to audit why a count changed.
-4. **Webhooks respond < 100ms**: persist payload, dispatch job, return 200. All OpenAI calls happen in queue workers, never in the request cycle.
-5. **Human-in-the-loop:** conversations have `mode: suggest|auto`. New stores start in `suggest` (AI reply goes to the owner with ✅ send / ✏️ edit buttons). `escalate_to_human` flips conversation to `needs_human` + notifies owner.
-6. **Debounce incoming messages:** customers send bursts ("aka" / "rtx 4060" / "bormi"). Wait 3–5s (Redis timer reset per message), merge, then one AI call.
-7. **Track tokens per message** (`messages.tokens`, agent_used) — per-store cost analytics later.
+1. **AI never invents facts.** Price/stock/details come ONLY from tool calls (`search_inventory`, `search_shop_info`, `save_lead`, `get_catalog_link`). There is NO tool to change price or grant a discount — the model is structurally unable to.
+2. **Multi-tenancy from day one.** Every domain table has `store_id`; models use the `BelongsToStore` trait (global scope + auto-fill on create). The store comes from the `Tenancy` singleton (set by `ResolveStore` middleware from the auth user, or by the inbound job from the resolved channel) — `store_id` is NEVER accepted from client input. To read across stores in a job, use `withoutGlobalScope('store')` then `Tenancy::set()`.
+3. **Stock is derived from `stock_movements`** (append-only). `Product.quantity` is recomputed by `InventoryService` via movements (`createProduct` applies initial qty as a movement; `adjustStock` appends one). `updateProduct` intentionally does NOT touch quantity.
+4. **Webhooks respond fast:** persist payload, dispatch job, return 200. All OpenAI/Instagram calls happen in queue workers (`ProcessIncomingInstagramMessage`), never in the request cycle.
+5. **Human-in-the-loop:** `AiConfig.mode` is `suggest|auto`. In `suggest`, the AI reply is stored as a `suggested` Message for the owner; in `auto` it's sent. If the tool loop doesn't converge (or a tool escalates), `AgentResult.needsHuman` flips the conversation to `needs_human`.
+6. **Idempotent inbound:** the job ignores duplicate deliveries by `Message.external_mid`.
+7. **Track tokens per message** (`messages.tokens`, `agent_used`, `tool_calls`).
 8. **Billing gates AI replies only**: expired subscription stops AI responses; inventory/CRM data stays visible and is never deleted.
 
-## Bot topology
+## Channels
 
-- **Platform bot** (`/webhooks/telegram/platform`, ours, single): onboarding wizard (register store → BotFather token instructions → owner pastes token), quick owner actions, notifications. Conversation-state machine kept in Redis/DB (`awaiting_bot_token`, `adding_product`, …).
-- **Per-store bots** (`/webhooks/telegram/{channel_uuid}`): each shop creates its own bot via BotFather and pastes the token; we validate via `getMe`, call `setWebhook` with a `secret_token`, store the token encrypted. Customers talk to the store's bot; AI answers there.
-- Local dev needs a public HTTPS tunnel for webhooks (ngrok/cloudflared).
-
-## Language & market context
-
-- Customers write mixed Uzbek/Russian, informal ("narxi qancha aka", "skolko stoit"). Agents must handle both; reply in the customer's language.
-- Local sales culture includes haggling — the AI acknowledges politely but never changes price (no tool for it).
-- Payments (Payme/Click/Uzum) are NOT integrated in MVP; subscription billing = payment link/receipt + manual admin confirmation (admin API endpoint / artisan command).
-- UI копи for sellers: Uzbek first. "Sklad" = inventory/warehouse, "lead" = so'rov.
-
-## MVP scope guard
-
-In scope (this repo): TG bot (customer AI + owner onboarding), REST API v1 covering inventory, CRM, conversations, settings, subscription (for the external dashboard SPA), admin-role endpoints, suggest/auto modes, trial → paid subscription.
-In scope (separate repo): web dashboard SPA consuming the API.
-Out of scope until after launch: Telegram bot channel, TG Mini App checkout, Flutter app, marketing site, online payment integration, analytics dashboards, multi-user-per-store roles.
-
-## Instagram integration (built)
-
-Uses **Instagram API with Instagram Login** (NOT Facebook Login + Pages). Shop owners log in with their Instagram Business/Creator account directly — no Facebook Page. OAuth: `instagram.com/oauth/authorize` → `api.instagram.com/oauth/access_token` (short-lived) → `graph.instagram.com/access_token` (long-lived); all resource/messaging calls use `graph.instagram.com`. Scopes: `instagram_business_basic`, `instagram_business_manage_messages`. Config in `config/chatig.php` (`instagram.*`), creds via `INSTAGRAM_*` env.
-
-Inbound flow: `GET /api/v1/webhooks/instagram` verifies the handshake (`hub.mode`/`hub.verify_token`/`hub.challenge`); `POST` is `X-Hub-Signature-256`-verified (HMAC-SHA256 of raw body with app secret) then dispatches `ProcessIncomingInstagramMessage`. The job resolves channel→store (Tenancy), stores the inbound `Message`, runs `SalesAgent` (tool-calling loop: `search_inventory`, `save_lead`), then in `auto` mode sends the reply via `InstagramService::sendMessage` and in `suggest` mode stores it as a `suggested` message for the owner. Idempotent on `message.mid`.
+- **Instagram (built):** Instagram API with **Instagram Login** (NOT Facebook Login + Pages). OAuth: `instagram.com/oauth/authorize` → `api.instagram.com/oauth/access_token` (short) → `graph.instagram.com/access_token` (long); all calls use `graph.instagram.com`. Scopes `instagram_business_basic`, `instagram_business_manage_messages`. Inbound: `GET /api/v1/webhooks/instagram` verifies the handshake; `POST` is `X-Hub-Signature-256` (HMAC-SHA256 of raw body) verified by `VerifyInstagramSignature`, then dispatches the job which resolves channel→store, stores the `Message`, runs `SalesAgent`, and sends (auto) or suggests (suggest).
+- **Telegram Mini App (built, catalog only):** one shared platform bot opens the Mini App per store via `t.me/<bot>/app?startapp=<store_public_id>`. Routes under `/api/v1/mini-app/...` are guarded by `VerifyTelegramInitData` (HMAC of WebApp `initData` with the bot token + freshness check) then `ResolveStoreFromPublicId`. There is **no Telegram AI chat yet** — Mini App = catalog + order placement only.
 
 ## Testing
 
-- Agents are unit-tested against a fake `LlmClient` (never hit OpenAI in tests).
-- Services (InventoryService etc.) get feature tests with the real DB.
-- Webhook controllers: test signature/secret verification and fast-ack behavior.
-- Run `pint` + `phpstan` before committing.
+- Agents/tools are unit-tested against `FakeLlmClient` / `FakeEmbeddingClient` — **never hit OpenAI**. Set `LLM_DRIVER=fake` is implicit via test config; SMS uses `FakeSmsSender` / `LogSmsSender`.
+- Services (Inventory, Lead, ShopFact) get unit tests with the DB; feature tests cover HTTP endpoints, webhook signature/secret verification, fast-ack, and Mini App initData auth (`tests/Feature/MiniApp/BuildsInitData.php` helper signs valid initData).
+- Tests run on sqlite — keep pgvector queries behind a `pgsql` driver guard so they fall back to keyword search under test.
+
+## Out of scope until after launch
+
+Telegram AI chat channel, Flutter app, marketing site, online payment integration (Payme/Click/Uzum — MVP billing is payment link/receipt + manual admin confirmation), analytics dashboards, multi-user-per-store roles. Deliberately NOT used: Repository pattern, CQRS, event sourcing, multi-LLM providers.
