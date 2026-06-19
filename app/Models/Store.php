@@ -43,6 +43,11 @@ class Store extends Model
         return $this->hasMany(User::class);
     }
 
+    public function channels(): HasMany
+    {
+        return $this->hasMany(Channel::class);
+    }
+
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
@@ -66,5 +71,54 @@ class Store extends Model
     public function isOnTrial(): bool
     {
         return $this->trial_ends_at !== null && $this->trial_ends_at->isFuture();
+    }
+
+    /**
+     * True once the store has an Instagram channel in the `connected` state.
+     * Drives the mandatory onboarding gate (the dashboard is locked until this
+     * is true).
+     */
+    public function hasConnectedInstagram(): bool
+    {
+        return $this->channels()
+            ->where('type', 'instagram')
+            ->where('status', 'connected')
+            ->exists();
+    }
+
+    /**
+     * Status of the post-connect AI bootstrap (prompt generation from the IG
+     * profile): pending | ready | failed, or null before any Instagram connect.
+     * Drives the onboarding "analysing…" screen.
+     */
+    public function aiSetupStatus(): ?string
+    {
+        return $this->instagramMeta()['ai_setup_status'] ?? null;
+    }
+
+    /**
+     * Granular step of the post-connect AI bootstrap:
+     * reading_profile | analyzing_posts | generating_prompt | saving |
+     * embedding_facts | ready | failed, or null before any connect. Drives the
+     * live progress UI.
+     */
+    public function aiSetupStep(): ?string
+    {
+        return $this->instagramMeta()['ai_setup_step'] ?? null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function instagramMeta(): array
+    {
+        /** @var Channel|null $channel */
+        $channel = $this->channels()
+            ->where('type', 'instagram')
+            ->where('status', 'connected')
+            ->latest('id')
+            ->first();
+
+        return $channel?->meta ?: [];
     }
 }

@@ -22,6 +22,32 @@ class AuthTest extends TestCase
         $this->app->instance(SmsSender::class, $this->sms);
     }
 
+    public function test_check_phone_reports_existing_user(): void
+    {
+        User::factory()->create(['phone' => '+998901234567']);
+
+        $this->postJson('/api/v1/auth/check-phone', ['phone' => '901234567'])
+            ->assertOk()
+            ->assertJsonPath('data.exists', true);
+    }
+
+    public function test_check_phone_reports_unknown_user(): void
+    {
+        $this->postJson('/api/v1/auth/check-phone', ['phone' => '901234567'])
+            ->assertOk()
+            ->assertJsonPath('data.exists', false);
+    }
+
+    public function test_me_exposes_instagram_connected_flag(): void
+    {
+        $store = Store::factory()->create();
+        $user = User::factory()->create(['store_id' => $store->id]);
+
+        $this->actingAs($user)->getJson('/api/v1/me')
+            ->assertOk()
+            ->assertJsonPath('data.store.instagram_connected', false);
+    }
+
     public function test_register_creates_store_and_unverified_user_and_sends_otp(): void
     {
         $response = $this->postJson('/api/v1/auth/register', [

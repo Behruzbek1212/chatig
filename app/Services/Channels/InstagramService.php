@@ -2,12 +2,16 @@
 
 namespace App\Services\Channels;
 
+use App\Jobs\AnalyzeInstagramProfile;
+use App\Models\AiConfig;
 use App\Models\Channel;
+use App\Models\ShopFact;
 use App\Models\Store;
 use App\Services\Channels\Exceptions\InstagramException;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
+use Throwable;
 
 /**
  * Instagram API with Instagram Login (https://developers.facebook.com/docs/instagram-platform).
@@ -73,7 +77,7 @@ class InstagramService
 
         $this->subscribeToMessages($longLived['access_token']);
 
-        return Channel::updateOrCreate(
+        $channel = Channel::updateOrCreate(
             ['store_id' => $store->id, 'type' => 'instagram'],
             [
                 'external_id' => (string) ($profile['user_id'] ?? $short['user_id']),
@@ -81,14 +85,33 @@ class InstagramService
                 'access_token' => $longLived['access_token'],
                 'status' => 'connected',
                 'token_expires_at' => now()->addSeconds((int) ($longLived['expires_in'] ?? 5184000)),
-                'meta' => ['scopes' => config('chatig.instagram.scopes')],
+                'meta' => [
+                    'scopes' => config('chatig.instagram.scopes'),
+                    'ai_setup_status' => 'pending',
+                ],
             ],
         );
+
+        // Analyse the freshly-connected profile and generate a starter AI prompt.
+        AnalyzeInstagramProfile::dispatch($channel->id);
+
+        return $channel;
     }
 
+    /**
+     * Disconnect the channel AND clear the auto-generated AI setup (system prompt
+     * + bootstrapped shop facts) for its store. This makes a later re-connect run
+     * the full AnalyzeInstagramProfile pipeline again from scratch — re-reading
+     * the profile/bio/posts and regenerating the prompt + facts — instead of the
+     * job short-circuiting on a pre-existing AiConfig. Scoped explicitly to the
+     * channel's store so it never touches another tenant.
+     */
     public function disconnect(Channel $channel): void
     {
         $channel->update(['status' => 'disconnected', 'access_token' => null]);
+
+        AiConfig::withoutGlobalScope('store')->where('store_id', $channel->store_id)->delete();
+        ShopFact::withoutGlobalScope('store')->where('store_id', $channel->store_id)->delete();
     }
 
     /**
@@ -166,6 +189,113 @@ class InstagramService
         }
 
         return $response->json();
+    }
+
+    /**
+     * Fetch a lightweight snapshot of the connected account for AI analysis:
+     * the profile fields the IG Login API exposes (name, account_type, counts,
+     * profile picture) plus the most recent media captions and — best-effort —
+     * the bio (see fetchBiography()). NOTE: `biography` is NOT on the plain
+     * Instagram-Login `/me` edge, so we read it via the Business Discovery edge
+     * and silently fall back to captions-only when it is unavailable.
+     * Best-effort throughout — any failure returns whatever was gathered so
+     * onboarding never hard-fails.
+     *
+     * @return array{username:?string, name:?string, account_type:?string, followers_count:?int, follows_count:?int, media_count:?int, profile_picture_url:?string, biography:?string, captions:list<string>}
+     */
+    public function fetchProfileInsights(Channel $channel, int $mediaLimit = 15): array
+    {
+        $token = $channel->access_token;
+
+        $username = $channel->username;
+        $name = null;
+        $accountType = null;
+        $followers = null;
+        $follows = null;
+        $mediaCount = null;
+        $profilePictureUrl = null;
+        try {
+            $profile = Http::get($this->graph().'/me', [
+                'fields' => 'username,name,account_type,followers_count,follows_count,media_count,profile_picture_url',
+                'access_token' => $token,
+            ]);
+            if ($profile->successful()) {
+                $username = $profile->json('username') ?? $username;
+                $name = $profile->json('name');
+                $accountType = $profile->json('account_type');
+                $followers = $profile->json('followers_count');
+                $follows = $profile->json('follows_count');
+                $mediaCount = $profile->json('media_count');
+                $profilePictureUrl = $profile->json('profile_picture_url');
+            }
+        } catch (Throwable) {
+            // ignore — profile context is optional
+        }
+
+        // Bio is the single richest signal about what the shop sells/offers, but
+        // the Instagram-Login API hides it on /me. Pull it via Business Discovery
+        // (best-effort; null when the account is personal/private or the edge is
+        // unsupported).
+        $biography = $username !== null ? $this->fetchBiography($token, $username) : null;
+
+        $captions = [];
+        try {
+            $media = Http::get($this->graph().'/me/media', [
+                'fields' => 'caption,media_type',
+                'limit' => $mediaLimit,
+                'access_token' => $token,
+            ]);
+            if ($media->successful()) {
+                foreach ($media->json('data', []) as $item) {
+                    $caption = trim((string) ($item['caption'] ?? ''));
+                    if ($caption !== '') {
+                        $captions[] = $caption;
+                    }
+                }
+            }
+        } catch (Throwable) {
+            // ignore — captions are optional context
+        }
+
+        return [
+            'username' => $username,
+            'name' => $name,
+            'account_type' => $accountType,
+            'followers_count' => $followers !== null ? (int) $followers : null,
+            'follows_count' => $follows !== null ? (int) $follows : null,
+            'media_count' => $mediaCount !== null ? (int) $mediaCount : null,
+            'profile_picture_url' => $profilePictureUrl !== null ? (string) $profilePictureUrl : null,
+            'biography' => $biography,
+            'captions' => $captions,
+        ];
+    }
+
+    /**
+     * Read the account's own bio via the Business Discovery edge — the only way
+     * to obtain `biography` under the Instagram-Login API. Self-discovery (an
+     * account looking itself up by username) works for public Business/Creator
+     * accounts. Strictly best-effort: returns null on any failure (personal/
+     * private account, unsupported edge, network error) so the caller falls
+     * back to caption-only context.
+     */
+    private function fetchBiography(string $token, string $username): ?string
+    {
+        try {
+            $response = Http::get($this->graph().'/me', [
+                'fields' => "business_discovery.username({$username}){biography}",
+                'access_token' => $token,
+            ]);
+
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $bio = trim((string) $response->json('business_discovery.biography', ''));
+
+            return $bio !== '' ? $bio : null;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private function subscribeToMessages(string $token): void

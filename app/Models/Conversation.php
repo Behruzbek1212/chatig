@@ -26,12 +26,13 @@ class Conversation extends Model
     /** @use HasFactory<ConversationFactory> */
     use BelongsToStore, HasFactory;
 
-    protected $fillable = ['store_id', 'customer_id', 'channel', 'status', 'mode', 'last_message_at'];
+    protected $fillable = ['store_id', 'customer_id', 'channel', 'status', 'mode', 'last_message_at', 'last_read_at'];
 
     protected function casts(): array
     {
         return [
             'last_message_at' => 'datetime',
+            'last_read_at' => 'datetime',
         ];
     }
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\ConversationController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\LeadController;
@@ -26,6 +27,7 @@ Route::prefix('v1')->group(function () {
 
     // --- Auth (public) ---
     Route::prefix('auth')->group(function () {
+        Route::post('check-phone', [AuthController::class, 'checkPhone']);
         Route::post('register', [AuthController::class, 'register']);
         Route::post('register/verify', [AuthController::class, 'verifyRegister']);
         Route::post('login', [AuthController::class, 'login']);
@@ -59,6 +61,7 @@ Route::prefix('v1')->group(function () {
         // Integrations
         Route::get('integrations', [IntegrationController::class, 'index']);
         Route::get('integrations/instagram/connect-url', [IntegrationController::class, 'connectUrl']);
+        Route::get('integrations/instagram/status', [IntegrationController::class, 'instagramStatus']);
         Route::get('integrations/instagram/auth', [IntegrationController::class, 'auth']);
         Route::post('integrations/telegram/connect', [IntegrationController::class, 'telegramConnect']);
         Route::delete('integrations/{channel}', [IntegrationController::class, 'destroy']);
@@ -81,6 +84,14 @@ Route::prefix('v1')->group(function () {
         Route::get('leads', [LeadController::class, 'index']);
         Route::get('leads/{lead}', [LeadController::class, 'show']);
         Route::patch('leads/{lead}', [LeadController::class, 'update']);
+
+        // Suhbatlar (Instagram/Telegram yozishmalari)
+        Route::get('chats', [ConversationController::class, 'index']);
+        Route::get('chats/{chat}', [ConversationController::class, 'show']);
+        Route::get('chats/{chat}/messages', [ConversationController::class, 'messages']);
+        Route::post('chats/{chat}/messages', [ConversationController::class, 'send']);
+        Route::get('chats/{chat}/insight', [ConversationController::class, 'insight']);
+        Route::post('chats/{chat}/read', [ConversationController::class, 'markRead']);
 
         // Shop facts (address, phone, working hours, delivery/return policy, ...)
         Route::get('shop-facts', [ShopFactController::class, 'index']);

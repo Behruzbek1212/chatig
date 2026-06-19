@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\AiConfig;
 use App\Models\Channel;
+use App\Models\ShopFact;
 use App\Models\Store;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -118,8 +120,78 @@ class IntegrationTest extends TestCase
             ->assertJsonPath('data.status', 'disconnected');
     }
 
+    public function test_disconnect_clears_ai_setup_so_reconnect_reanalyzes(): void
+    {
+        $user = $this->owner();
+        $channel = Channel::factory()->create(['store_id' => $user->store_id, 'type' => 'instagram']);
+        AiConfig::create([
+            'store_id' => $user->store_id,
+            'system_prompt' => 'Boshlang\'ich prompt',
+            'mode' => 'suggest',
+            'is_active' => true,
+        ]);
+        ShopFact::factory()->create(['store_id' => $user->store_id]);
+
+        $this->actingAs($user)->deleteJson("/api/v1/integrations/{$channel->id}")->assertOk();
+
+        // AI prompt + bootstrapped facts are wiped so a re-connect runs the full
+        // analysis pipeline again (the job no longer short-circuits).
+        $this->assertSame(0, AiConfig::where('store_id', $user->store_id)->count());
+        $this->assertSame(0, ShopFact::where('store_id', $user->store_id)->count());
+    }
+
     public function test_requires_auth(): void
     {
         $this->getJson('/api/v1/integrations')->assertUnauthorized();
+    }
+
+    public function test_instagram_status_reports_not_connected_when_no_channel(): void
+    {
+        $this->actingAs($this->owner())
+            ->getJson('/api/v1/integrations/instagram/status')
+            ->assertOk()
+            ->assertJsonPath('data.connected', false)
+            ->assertJsonPath('data.ai_setup_status', null)
+            ->assertJsonPath('data.ai_setup_step', null);
+    }
+
+    public function test_instagram_status_reports_in_progress_step(): void
+    {
+        $user = $this->owner();
+        Channel::factory()->create([
+            'store_id' => $user->store_id,
+            'type' => 'instagram',
+            'meta' => ['ai_setup_status' => 'pending', 'ai_setup_step' => 'generating_prompt'],
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/api/v1/integrations/instagram/status')
+            ->assertOk()
+            ->assertJsonPath('data.connected', true)
+            ->assertJsonPath('data.ai_setup_status', 'pending')
+            ->assertJsonPath('data.ai_setup_step', 'generating_prompt');
+    }
+
+    public function test_instagram_status_reports_ready_and_is_store_scoped(): void
+    {
+        $user = $this->owner();
+        Channel::factory()->create([
+            'store_id' => $user->store_id,
+            'type' => 'instagram',
+            'meta' => ['ai_setup_status' => 'ready', 'ai_setup_step' => 'ready'],
+        ]);
+        // Another store's channel must never leak through.
+        Channel::factory()->create(['type' => 'instagram', 'meta' => ['ai_setup_step' => 'reading_profile']]);
+
+        $this->actingAs($user)
+            ->getJson('/api/v1/integrations/instagram/status')
+            ->assertOk()
+            ->assertJsonPath('data.ai_setup_status', 'ready')
+            ->assertJsonPath('data.ai_setup_step', 'ready');
+    }
+
+    public function test_instagram_status_requires_auth(): void
+    {
+        $this->getJson('/api/v1/integrations/instagram/status')->assertUnauthorized();
     }
 }

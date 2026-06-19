@@ -29,6 +29,27 @@ class IntegrationController extends ApiController
     }
 
     /**
+     * Lightweight, pollable status of the store's Instagram channel and its AI
+     * setup pipeline. The SPA polls this after the OAuth popup closes to render
+     * live progress (reading_profile → … → ready/failed). Store-scoped: the
+     * channel is resolved through the global store scope, never client input.
+     */
+    public function instagramStatus(): JsonResponse
+    {
+        $channel = Channel::query()->where('type', 'instagram')->first();
+
+        if (! $channel) {
+            return $this->ok([
+                'connected' => false,
+                'ai_setup_status' => null,
+                'ai_setup_step' => null,
+            ]);
+        }
+
+        return $this->ok(new ChannelResource($channel));
+    }
+
+    /**
      * Browser redirect endpoint — opens Instagram OAuth directly in a popup.
      * No JSON: the popup window navigates here and gets redirected to Instagram.
      */

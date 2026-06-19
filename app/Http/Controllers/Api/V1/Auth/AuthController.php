@@ -19,6 +19,18 @@ class AuthController extends ApiController
 {
     public function __construct(private readonly OtpService $otp) {}
 
+    /**
+     * Single entry point for the unified auth screen: the SPA submits the phone
+     * first and branches to login (existing) or registration (new) based on the
+     * `exists` flag. Deliberately reveals existence — the product favours UX here.
+     */
+    public function checkPhone(LoginRequest $request): JsonResponse
+    {
+        return $this->ok([
+            'exists' => User::where('phone', $request->string('phone'))->exists(),
+        ]);
+    }
+
     public function register(RegisterRequest $request): JsonResponse
     {
         DB::transaction(function () use ($request): void {

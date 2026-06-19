@@ -20,7 +20,22 @@ class FakeLlmClient implements LlmClient
     /** @var array<int, LlmTurn> */
     private array $scriptedTurns = [];
 
+    /** @var array<int, string> */
+    private array $scriptedReplies = [];
+
     public function __construct(public string $reply = 'Salom! Sizga qanday yordam bera olaman?') {}
+
+    /**
+     * Queue the replies chat() will return in order. Once exhausted it falls
+     * back to $reply. Lets a test drive multiple sequential chat() calls (e.g.
+     * prompt generation then JSON fact extraction).
+     */
+    public function scriptChat(string ...$replies): self
+    {
+        $this->scriptedReplies = array_merge($this->scriptedReplies, $replies);
+
+        return $this;
+    }
 
     /**
      * Queue the turns chatWithTools() will return, in order.
@@ -35,6 +50,10 @@ class FakeLlmClient implements LlmClient
     public function chat(string $model, array $messages, array $options = []): string
     {
         $this->calls[] = ['model' => $model, 'messages' => $messages, 'options' => $options];
+
+        if ($this->scriptedReplies !== []) {
+            return array_shift($this->scriptedReplies);
+        }
 
         return $this->reply;
     }

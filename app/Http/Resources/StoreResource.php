@@ -19,6 +19,12 @@ class StoreResource extends JsonResource
             'status' => $this->status,
             'trial_ends_at' => $this->trial_ends_at?->toIso8601String(),
             'on_trial' => $this->isOnTrial(),
+            // Drives the mandatory onboarding gate on the SPA.
+            'instagram_connected' => $this->hasConnectedInstagram(),
+            // pending | ready | failed | null — onboarding "AI analysing…" screen.
+            'ai_setup_status' => $this->aiSetupStatus(),
+            // Granular live step for the progress UI.
+            'ai_setup_step' => $this->aiSetupStep(),
         ];
     }
 }

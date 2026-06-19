@@ -1,4 +1,5 @@
 <?php
+
 // BotFather mini app rasmi uchun: istalgan rasmni aniq 640x360 ga o'tkazadi.
 // Imagick orqali (Docker'da bor). Ishlatish:
 //   php resize640.php <kirish-fayl> <chiqish-fayl> [cover|contain]
@@ -26,7 +27,7 @@ $img->setImageColorspace(Imagick::COLORSPACE_SRGB);
 if ($mode === 'contain') {
     // Butun rasmni sig'dir, qora fonga letterbox qil.
     $img->thumbnailImage($W, $H, true);
-    $canvas = new Imagick();
+    $canvas = new Imagick;
     $canvas->newImage($W, $H, new ImagickPixel('black'));
     $x = (int) (($W - $img->getImageWidth()) / 2);
     $y = (int) (($H - $img->getImageHeight()) / 2);
